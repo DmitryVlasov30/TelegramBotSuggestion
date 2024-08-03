@@ -11,6 +11,7 @@ general_message_id = 'message_id главного админа'
 local_admin = [[general_message_id, 'главный админ', []]]
 name_chanel = 'название вашего телеграмм канала'
 chanel_chat_id = 'chat_id вашего тг чата (отрицательное число)'
+chanel_id = 'chat id группы канала'
 block_users = {}
 
 try:
@@ -67,10 +68,10 @@ try:
         text = message.text.lower()[7:].strip().replace(' ', '')
         flag_f = False
         for i in range(len(local_admin)):
-            str_i = str(i + 1)
+            str_i = str(i+1)
             if str_i == text:
-                if str(local_admin[int(text) - 1][0]) != general_message_id:
-                    del local_admin[int(text) - 1]
+                if str(local_admin[int(text)-1][0]) != general_message_id:
+                    del local_admin[int(text)-1]
                     flag_f = True
                     break
                 else:
@@ -123,7 +124,7 @@ try:
         if len(local_admin) != 0:
             list_loc_adm = ''
             for i in range(len(local_admin)):
-                list_loc_adm += f"№ {i + 1} name: {local_admin[i][1]}\n"
+                list_loc_adm += f"№ {i+1} name: {local_admin[i][1]}\n"
             bot.send_message(general_message_id, f'{list_loc_adm}')
 
 
@@ -171,7 +172,7 @@ try:
 
     @bot.message_handler(content_types=["text", "photo", "video"])
     def sleep_text(message):
-        global local_admin, all_users, block_users
+        global local_admin, all_users, block_users, chanel_chat_id, chanel_id
 
         all_users.add(message.from_user.id)
 
@@ -181,6 +182,9 @@ try:
 
         if str(message.from_user.id) in block_users:
             bot.send_message(message.chat.id, 'Вы были заблокированны модератором этого канала')
+            return None
+
+        if chanel_chat_id == str(message.chat.id) or chanel_id == str(message.chat.id):
             return None
 
         bot.send_message(message.chat.id, f'Спасибо за ваше сообщение')
@@ -203,17 +207,22 @@ try:
 
     @bot.callback_query_handler(func=lambda callback: True)
     def callback_message(call):
-        global local_admin, id_local_admin, name_local_admin, name_chanel, chanel_chat_id
+        global local_admin, id_local_admin, name_local_admin, name_chanel, chanel_chat_id, general_message_id
         try:
             if call.data == 'blocked':
-                if not (block_users[call.message.from_user.id] in block_users):
-                    block_users[str(call.message.chat.id)] = str(call.message.from_user.username)
-                bot.restrict_chat_member(chanel_chat_id, call.message.from_user.id)
+                user_message_id = str(call.message.from_user.id)
+                if not (user_message_id in block_users) and user_message_id != general_message_id:
+                    user = bot.get_chat(call.message.chat.id)
+                    username = user.username
+                    block_users[str(call.message.chat.id)] = str(username)
+                    bot.restrict_chat_member(chanel_chat_id, call.message.from_user.id)
+
             if call.data == 'public':
                 bot.copy_message(
                     chat_id=f'@{name_chanel}',
                     from_chat_id=call.message.chat.id,
                     message_id=call.message.id - 1)
+
             if call.data == 'public' or call.data == 'delete' or call.data == 'blocked':
                 id_delete_message = 0
                 for i in range(len(local_admin)):
@@ -226,7 +235,7 @@ try:
                         local_admin[del_message][0], int(local_admin[del_message][2][id_delete_message])
                     )
                     bot.delete_message(
-                        local_admin[del_message][0], int(local_admin[del_message][2][id_delete_message]) - 1
+                        local_admin[del_message][0], int(local_admin[del_message][2][id_delete_message])-1
                     )
                     del local_admin[del_message][2][id_delete_message]
 
