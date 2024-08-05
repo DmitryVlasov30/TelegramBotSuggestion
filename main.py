@@ -12,6 +12,7 @@ local_admin = [[general_message_id, 'главный админ', []]]
 name_chanel = 'название вашего телеграмм канала'
 chanel_id = 'chat id группы канала (отрицательное число)'
 block_users = {}
+appeal_list = []
 # [user_id, username, massage_id]
 block_message_list = []
 
@@ -23,6 +24,7 @@ try:
                 return None
             function = func(message)
             return function
+
         return wrapper
 
 
@@ -154,7 +156,9 @@ try:
 
         tuple_block = tuple(block_users.items())
         for i in range(len(tuple_block)):
-            block_inf += f'username: {tuple_block[i][1]}, message id: {tuple_block[i][0]}\n'
+            block_inf += (f'username: {tuple_block[i][1][0]}, '
+                          f'message id: {tuple_block[i][0]}, '
+                          f'возможность апелляции: {"есть" if tuple_block[i][1][1] else 'нету'}\n')
 
         bot.send_message(general_message_id, block_inf)
 
@@ -175,7 +179,7 @@ try:
                 tuple_block = tuple(block_users.items())
 
                 for i in range(len(tuple_block)):
-                    if tuple_block[i][1] == user:
+                    if tuple_block[i][1][0] == user:
                         unblock_user_id = tuple_block[i][0]
 
                 if unblock_user_id == '':
@@ -185,11 +189,41 @@ try:
                 bot.unban_chat_member(chanel_id, int(unblock_user_id))
                 del block_users[unblock_user_id]
                 bot.send_message(general_message_id, 'Пользователь разблокирован')
+                bot.send_message(unblock_user_id, 'Вас разблокировали')
                 return None
 
             bot.send_message(general_message_id, 'Тип данных не поддерживается')
         except Exception as ex:
             bot.send_message(general_message_id, str(ex))
+
+
+    @bot.message_handler(commands=["appeal"])
+    @not_send_message_on_public_chat
+    def appeal(message):
+        global general_message_id, block_users, appeal_list
+
+        if not str(message.chat.id) in block_users:
+            bot.send_message(message.chat.id, "Вы не заблокированы")
+            return None
+
+        if message.content_type != 'text':
+            bot.send_message(message.chat.id, 'В качестве апелляции вы можете подать только текст')
+            return None
+
+        bot.send_message(message.chat.id, 'Мы отправили запрос на апелляцию')
+        chat_id = message.chat.id
+
+        message_text = message.text[7:].strip()
+
+        markup = types.InlineKeyboardMarkup()
+        btn_approve = types.InlineKeyboardButton('✅', callback_data='approve')
+        btn_refuse = types.InlineKeyboardButton('❌', callback_data='refuse')
+        markup.row(btn_approve, btn_refuse)
+
+        message_for_general_admin = bot.send_message(general_message_id,
+                                                     f'Вам отправили запрос на разблокировку:\n {message_text}',
+                                                     reply_markup=markup)
+        appeal_list.append([chat_id, message_for_general_admin.id])
 
 
     @bot.message_handler(content_types=["text", "photo", "video"])
@@ -238,7 +272,7 @@ try:
     @bot.callback_query_handler(func=lambda callback: True)
     def callback_message(call):
         global local_admin, id_local_admin, name_local_admin, name_chanel, \
-            general_message_id, chanel_id, block_message_list
+            general_message_id, chanel_id, block_message_list, appeal_list
 
         try:
             if call.data == 'blocked':
@@ -258,9 +292,9 @@ try:
                     bot.send_message(general_message_id, 'Вас нельзя заблокировать!')
 
                 if not (block_user_id in block_users) and str(block_user_id) != general_message_id:
-                    block_users[str(block_user_id)] = str(block_username)
-                    print(block_users)
+                    block_users[str(block_user_id)] = [str(block_username), True]
                     bot.restrict_chat_member(chanel_id, block_user_id)
+                    bot.send_message(block_user_id, 'Вас заблокировали')
 
             if call.data == 'public':
                 bot.copy_message(
@@ -283,6 +317,26 @@ try:
                         local_admin[del_message][0], int(local_admin[del_message][2][id_delete_message])-1
                     )
                     del local_admin[del_message][2][id_delete_message]
+
+            if call.data == 'approve' or call.data == 'refuse':
+                id_appeal_message = 0
+                for i in range(len(appeal_list)):
+                    if call.message.id == appeal_list[i][1]:
+                        id_appeal_message = i
+
+                if call.data == 'approve':
+                    bot.unban_chat_member(chanel_id, int(appeal_list[id_appeal_message][0]))
+                    del block_users[str(appeal_list[id_appeal_message][0])]
+                    del appeal_list[id_appeal_message]
+                    bot.delete_message(appeal_list[id_appeal_message][0], appeal_list[id_appeal_message][1])
+
+                    bot.send_message(appeal_list[id_appeal_message][0], 'Вас разблокировали')
+
+                else:
+                    bot.delete_message(appeal_list[id_appeal_message][0], appeal_list[id_appeal_message][1])
+                    block_users[appeal_list[id_appeal_message][0]][1] = False
+                    bot.send_message(appeal_list[id_appeal_message][0], 'Вам отказано в разблокировке')
+                    del appeal_list[id_appeal_message]
 
             if call.data == "yes_admin":
                 local_admin.append([str(id_local_admin), str(name_local_admin), []])
