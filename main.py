@@ -24,7 +24,6 @@ try:
                 return None
             function = func(message)
             return function
-
         return wrapper
 
 
@@ -210,8 +209,12 @@ try:
             bot.send_message(message.chat.id, 'В качестве апелляции вы можете подать только текст')
             return None
 
+        if not block_users[str(message.chat.id)][1]:
+            bot.send_message(message.chat.id, 'Вы не можете отправлять апелляцию больше одного раза')
+            return None
+
         bot.send_message(message.chat.id, 'Мы отправили запрос на апелляцию')
-        chat_id = message.chat.id
+        chat_id = str(message.chat.id)
 
         message_text = message.text[7:].strip()
 
@@ -326,16 +329,17 @@ try:
 
                 if call.data == 'approve':
                     bot.unban_chat_member(chanel_id, int(appeal_list[id_appeal_message][0]))
-                    del block_users[str(appeal_list[id_appeal_message][0])]
-                    del appeal_list[id_appeal_message]
-                    bot.delete_message(appeal_list[id_appeal_message][0], appeal_list[id_appeal_message][1])
-
+                    bot.delete_message(general_message_id, appeal_list[id_appeal_message][1])
                     bot.send_message(appeal_list[id_appeal_message][0], 'Вас разблокировали')
 
+                    del block_users[str(appeal_list[id_appeal_message][0])]
+                    del appeal_list[id_appeal_message]
+
                 else:
-                    bot.delete_message(appeal_list[id_appeal_message][0], appeal_list[id_appeal_message][1])
+                    bot.delete_message(general_message_id, appeal_list[id_appeal_message][1])
                     block_users[appeal_list[id_appeal_message][0]][1] = False
                     bot.send_message(appeal_list[id_appeal_message][0], 'Вам отказано в разблокировке')
+
                     del appeal_list[id_appeal_message]
 
             if call.data == "yes_admin":
